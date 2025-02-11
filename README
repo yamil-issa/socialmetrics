@@ -1,0 +1,15 @@
+# Tweet Analyzer
+
+Ce projet permet d'analyser le sentiment des tweets en utilisant une API Flask, une base de données MySQL, et un modèle de régression logistique.
+
+## Installation
+
+1. Cloner le dépôt
+   - git clone https://github.com/votre-utilisateur/socialmetrics.git
+   - cd socialmetrics
+
+2. Installer les dépendances
+   - pip install -r requirements.txt
+
+3. Démarrer l'API Flask
+   - python app.py
