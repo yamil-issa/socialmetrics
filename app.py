@@ -46,15 +46,12 @@ def load_or_train_model():
         X = df['text']
         y = df['positive']
 
-        # Text vectorisation
         vectorizer = TfidfVectorizer()
         X_vec = vectorizer.fit_transform(X)
 
-        # Model training
         model = LogisticRegression()
         model.fit(X_vec, y)
 
-        # Save the model and vectorise it
         joblib.dump(model, "model.pkl")
         joblib.dump(vectorizer, "vectorizer.pkl")
 
@@ -64,7 +61,6 @@ def load_or_train_model():
 def analyze_sentiment():
     data = request.json
     tweets = data.get('tweets', [])
-
     model, vectorizer = load_or_train_model()
     if model is None or vectorizer is None:
         return jsonify({"error": "No annotated data available"}), 400
@@ -72,10 +68,50 @@ def analyze_sentiment():
     X_vec = vectorizer.transform(tweets)
     predictions = model.predict_proba(X_vec)[:, 1]
     sentiment_scores = 2 * predictions - 1
-
     results = {f"tweet{i+1}": float(score) for i, score in enumerate(sentiment_scores)}
     return jsonify(results)
 
+@app.route('/annotate', methods=['POST'])
+def annotate_tweet():
+    data = request.json
+    text = data.get('text')
+    positive = data.get('positive', 0)
+    negative = data.get('negative', 0)
+
+    if not text:
+        return jsonify({"error": "Text is required"}), 400
+
+    cursor.execute("INSERT INTO tweets (text, positive, negative) VALUES (%s, %s, %s)", (text, positive, negative))
+    db.commit()
+    return jsonify({"message": "Tweet annotated successfully"}), 201
+
+@app.route('/evaluate', methods=['GET'])
+def evaluate_model():
+    df = load_annotated_data()
+    if df.empty:
+        return jsonify({"error": "No annotated data available"}), 400
+
+    X = df['text']
+    y = df['positive']
+
+    vectorizer = TfidfVectorizer()
+    X_vec = vectorizer.fit_transform(X)
+
+    X_train, X_test, y_train, y_test = train_test_split(X_vec, y, test_size=0.2, random_state=42)
+
+    model = LogisticRegression()
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    cm = confusion_matrix(y_test, y_pred)
+    tn, fp, fn, tp = cm.ravel()
+
+    return jsonify({
+        "confusion_matrix": cm.tolist(),
+        "accuracy": float((tp + tn) / (tp + tn + fp + fn)),
+        "precision": float(tp / (tp + fp)),
+        "recall": float(tp / (tp + fn))
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)
