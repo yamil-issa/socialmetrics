@@ -1,5 +1,7 @@
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from app import load_annotated_data
 import joblib
-from app import load_annotated_data, load_or_train_model
 
 def retrain_model():
     df = load_annotated_data()
@@ -7,7 +9,18 @@ def retrain_model():
         print("No annotated data available for retraining.")
         return
     
-    model, vectorizer = load_or_train_model()
+    X = df['text']
+    y = df['positive']
+
+    vectorizer = TfidfVectorizer()
+    X_vec = vectorizer.fit_transform(X)
+
+    model = LogisticRegression()
+    model.fit(X_vec, y)
+
+    joblib.dump(model, "model.pkl")
+    joblib.dump(vectorizer, "vectorizer.pkl")
+
     print("Model retrained successfully.")
 
 if __name__ == '__main__':

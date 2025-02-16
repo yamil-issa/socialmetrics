@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
 import mysql.connector
 import joblib
 import os
@@ -17,16 +17,6 @@ db = mysql.connector.connect(
     database="socialmetrics"
 )
 cursor = db.cursor()
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS tweets (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    text TEXT NOT NULL,
-    positive INT DEFAULT 0,
-    negative INT DEFAULT 0
-)
-""")
-db.commit()
 
 def load_annotated_data():
     cursor.execute("SELECT text, positive, negative FROM tweets")
@@ -74,16 +64,25 @@ def analyze_sentiment():
 @app.route('/annotate', methods=['POST'])
 def annotate_tweet():
     data = request.json
-    text = data.get('text')
-    positive = data.get('positive', 0)
-    negative = data.get('negative', 0)
 
-    if not text:
-        return jsonify({"error": "Text is required"}), 400
+    if isinstance(data, dict):
+        data = [data]
 
-    cursor.execute("INSERT INTO tweets (text, positive, negative) VALUES (%s, %s, %s)", (text, positive, negative))
+    if not isinstance(data, list):
+        return jsonify({"error": "Expected a JSON object (single tweet) or a list of tweets"}), 400
+
+    for tweet in data:
+        text = tweet.get('text')
+        positive = tweet.get('positive', 0)
+        negative = tweet.get('negative', 0)
+
+        if not text:
+            return jsonify({"error": "Each tweet must have a 'text' field"}), 400
+
+        cursor.execute("INSERT INTO tweets (text, positive, negative) VALUES (%s, %s, %s)", (text, positive, negative))
+
     db.commit()
-    return jsonify({"message": "Tweet annotated successfully"}), 201
+    return jsonify({"message": f"{len(data)} tweet(s) annotated successfully"}), 201
 
 @app.route('/evaluate', methods=['GET'])
 def evaluate_model():
@@ -106,11 +105,16 @@ def evaluate_model():
     cm = confusion_matrix(y_test, y_pred)
     tn, fp, fn, tp = cm.ravel()
 
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+
     return jsonify({
         "confusion_matrix": cm.tolist(),
         "accuracy": float((tp + tn) / (tp + tn + fp + fn)),
-        "precision": float(tp / (tp + fp)),
-        "recall": float(tp / (tp + fn))
+        "precision": float(precision),
+        "recall": float(recall),
+        "f1_score": float(f1)
     })
 
 if __name__ == '__main__':
