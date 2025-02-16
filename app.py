@@ -10,6 +10,7 @@ import os
 
 app = Flask(__name__)
 
+# MysQL connection
 db = mysql.connector.connect(
     host="localhost",
     user="root",
